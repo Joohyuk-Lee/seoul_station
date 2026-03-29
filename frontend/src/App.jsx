@@ -1,199 +1,213 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Menu, MapPin, Car, Navigation, Clock, CreditCard } from 'lucide-react';
+import { 
+  Menu, Car, Navigation, Clock, Calendar, Train, ChevronRight, CreditCard, MapPin 
+} from 'lucide-react';
 
 const App = () => {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
-  const [taxiPrice, setTaxiPrice] = useState(25000);
-  const [socarPrice, setSocarPrice] = useState(12000);
   
-  // 검색어 상태 관리
-  const [searchQuery, setSearchQuery] = useState("");
+  // 1. 상태 관리 (날짜 및 역 코드)
+  const [arrivalDate, setArrivalDate] = useState("");
+  const [startCity, setStartCity] = useState(""); // 상행 출발지 ID
+  const [departureDate, setDepartureDate] = useState("");
+  const [endCity, setEndCity] = useState("");   // 하행 도착지 ID
 
-  // 쏘카 서울역 공항철도 노외주차장 위치 (정확한 좌표 적용)
-  const SOCAR_ZONE = { lat: 37.553321, lng: 126.969948 };
+  const [arrivalTrains, setArrivalTrains] = useState([]);
+  const [departureTrains, setDepartureTrains] = useState([]);
+  const [availableCars, setAvailableCars] = useState([]);
 
-  // 컴포넌트가 마운트될 때 카카오맵 초기화
-useEffect(() => {
-    // 1. 카카오 객체가 있는지 확인하는 함수
-    const initMap = () => {
-      if (window.kakao && window.kakao.maps) {
-        const container = document.getElementById('kakao-map');
-        const options = {
-          center: new window.kakao.maps.LatLng(SOCAR_ZONE.lat, SOCAR_ZONE.lng),
-          level: 3
-        };
-        const map = new window.kakao.maps.Map(container, options);
-
-        const markerPosition = new window.kakao.maps.LatLng(SOCAR_ZONE.lat, SOCAR_ZONE.lng);
-        const marker = new window.kakao.maps.Marker({
-          position: markerPosition,
-          map: map
-        });
-
-        const infowindow = new window.kakao.maps.InfoWindow({
-          content: '<div style="padding:5px;font-size:12px;color:blue;font-weight:bold;">쏘카 서울역 노외주차장</div>'
-        });
-        infowindow.open(map, marker);
-      }
-    };
-
-    // 2. 만약 아직 로드가 안 됐다면 로드될 때까지 기다림
-    if (window.kakao && window.kakao.maps) {
-      initMap();
-    } else {
-      // 스크립트가 로드될 때까지 0.1초마다 체크 (간단한 방법)
-      const timer = setInterval(() => {
-        if (window.kakao && window.kakao.maps) {
-          initMap();
-          clearInterval(timer);
-        }
-      }, 100);
-    }
-  }, []);
-
-  // 검색 실행 함수 (백엔드 연결용)
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!searchQuery) return alert("목적지를 입력해주세요.");
-
-    console.log("검색어:", searchQuery);
-    
+  // 공통 기차 데이터 가져오기 함수
+  const fetchTrains = async (date, depId, arrId, setterFunc) => {
+    if (!date || !depId || !arrId) return;
+    const formattedDate = date.replace(/-/g, "");
     try {
-      // 실제 백엔드 주소가 생기면 아래 주석을 해제하고 연결하세요
-      // const response = await fetch(`http://localhost:80/api/v1/search?query=${searchQuery}`);
-      // const data = await response.json();
-      // console.log("결과:", data);
+      // 통합된 백엔드 주소 사용
+      const response = await fetch(`http://localhost:80/api/trains?date=${formattedDate}&depPlaceId=${depId}&arrPlaceId=${arrId}`);
+      const data = await response.json();
+      setterFunc(Array.isArray(data) ? data : [data]);
       
-      alert(`'${searchQuery}'까지의 예상 요금을 백엔드에서 불러옵니다.`);
+      // 하행선까지 조회가 되면 차량 목록 활성화 (예시 시나리오)
+      if (arrId !== 'NODE0000000001') {
+        setAvailableCars([
+          { id: 1, name: '더 뉴 아반떼', type: '준중형', price: '45,600', img: '🚗' },
+          { id: 2, name: '아이오닉 5', type: '전기차', price: '62,000', img: '⚡' },
+          { id: 3, name: '더 뉴 셀토스', type: '소형 SUV', price: '51,200', img: '🚙' },
+        ]);
+      }
     } catch (error) {
-      console.error("데이터 통신 오류:", error);
+      console.error("열차 로드 에러:", error);
     }
   };
 
+  // 상행: 선택도시 -> 서울역(NODE0000000001)
+  useEffect(() => { 
+    fetchTrains(arrivalDate, startCity, 'NODE0000000001', setArrivalTrains); 
+  }, [arrivalDate, startCity]);
+
+  // 하행: 서울역(NODE0000000001) -> 선택도시
+  useEffect(() => { 
+    fetchTrains(departureDate, 'NODE0000000001', endCity, setDepartureTrains); 
+  }, [departureDate, endCity]);
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
+    <div className="min-h-screen bg-gray-50 flex flex-col font-sans overflow-hidden">
       {/* ======= Header ======= */}
-      <header className="fixed top-0 w-full bg-white border-b h-16 flex items-center px-4 z-50 justify-between">
+      <header className="fixed top-0 w-full bg-white border-b h-16 flex items-center px-4 z-50 justify-between shadow-sm">
         <div className="flex items-center gap-4">
-          <Menu 
-            className="cursor-pointer text-gray-600" 
-            onClick={() => setSidebarOpen(!isSidebarOpen)} 
-          />
+          <Menu className="cursor-pointer text-gray-600" onClick={() => setSidebarOpen(!isSidebarOpen)} />
           <div className="flex items-center gap-2">
             <Car className="text-blue-600 w-8 h-8" />
-            <span className="text-xl font-bold text-gray-800">서울역 쏘카존</span>
+            <span className="text-xl font-bold text-gray-800 tracking-tight">서울역 쏘카 커넥트</span>
           </div>
         </div>
-
-        {/* 검색바 영역 */}
-        <div className="hidden md:flex flex-1 max-w-md mx-8">
-          <form onSubmit={handleSearch} className="relative w-full">
-            <input 
-              type="text" 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="목적지를 입력해 보세요" 
-              className="w-full border rounded-full py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button type="submit">
-              <Search className="absolute right-3 top-2.5 text-gray-400 w-5 h-5 cursor-pointer hover:text-blue-500" />
-            </button>
-          </form>
-        </div>
-
-        <div className="flex gap-2">
-          <button className="text-sm text-gray-600 px-3">로그인</button>
-          <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold">회원가입</button>
-        </div>
       </header>
-
-      {/* ======= Sidebar Overlay ======= */}
-      {isSidebarOpen && (
-        <div className="fixed inset-0 bg-black opacity-50 z-40" onClick={() => setSidebarOpen(false)}></div>
-      )}
-
-      {/* ======= Sidebar ======= */}
-      <aside className={`fixed left-0 top-16 h-full bg-white w-64 shadow-xl z-50 transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <nav className="p-4">
-          <ul className="space-y-4">
-            <li className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded cursor-pointer">
-              <Navigation className="w-5 h-5" /> <span>예약 확인</span>
-            </li>
-            <li className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded cursor-pointer">
-              <CreditCard className="w-5 h-5" /> <span>이용 요금</span>
-            </li>
-          </ul>
-        </nav>
-      </aside>
 
       {/* ======= Main Content ======= */}
       <main className="mt-16 flex-1 flex flex-col md:flex-row h-[calc(100vh-64px)] overflow-hidden">
         
-        {/* Left: Map Section */}
-        <div className="flex-1 bg-gray-200 relative">
-           <div id="kakao-map" className="w-full h-full">
-              {/* 여기에 카카오 지도가 렌더링됩니다 */}
-           </div>
+        {/* [왼쪽] 기차 시간표 섹션 (2분할) */}
+        <div className="w-full md:w-3/5 flex border-r bg-white overflow-hidden">
+          
+          {/* 상행 (서울행) */}
+          <div className="w-1/2 p-6 border-r flex flex-col">
+            <div className="flex items-center gap-2 mb-6 text-blue-700 font-bold border-b pb-2">
+              <Train className="w-5 h-5" /> <span>1. 서울역 도착 (상행)</span>
+            </div>
+            <div className="space-y-4 mb-6">
+              <div className="group">
+                <label className="text-[10px] text-gray-400 font-bold ml-1 mb-1 block">도착 일자</label>
+                <input type="date" className="w-full border border-gray-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" 
+                       onChange={(e) => setArrivalDate(e.target.value)} />
+              </div>
+              <div className="group">
+                <label className="text-[10px] text-gray-400 font-bold ml-1 mb-1 block">출발지(지방역)</label>
+                <select className="w-full border border-gray-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" 
+                        onChange={(e) => setStartCity(e.target.value)}>
+                  <option value="">출발지 선택</option>
+                  <option value="NODE0000000011">부산역</option>
+                  <option value="NODE0000000012">대전역</option>
+                  <option value="NODE0000000002">동대구역</option>
+                  <option value="NODE0000000020">광주송정역</option>
+                  <option value="NODE0000000570">포항역</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+              {arrivalTrains.length > 0 ? arrivalTrains.map((train, i) => (
+                <div key={i} className="p-4 border border-gray-100 rounded-xl hover:bg-blue-50 hover:border-blue-200 cursor-pointer transition shadow-sm">
+                  <p className="text-[10px] font-bold text-blue-500 mb-1">{train.traingradename} {train.trainno}</p>
+                  <div className="flex justify-between items-end">
+                    <span className="text-xl font-black text-gray-800">
+                      {train.arrtime?.toString().substring(8, 10)}:{train.arrtime?.toString().substring(10, 12)}
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-medium">서울역 도착예정</span>
+                  </div>
+                </div>
+              )) : (
+                <div className="h-full flex flex-col items-center justify-center text-gray-300 py-20 italic">
+                   <Calendar size={32} className="mb-2 opacity-20" />
+                   <p className="text-sm text-center px-4">서울로 오는 기차표를<br/>선택해 주세요</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 하행 (지방행) */}
+          <div className="w-1/2 p-6 flex flex-col bg-gray-50/40">
+            <div className="flex items-center gap-2 mb-6 text-gray-700 font-bold border-b pb-2">
+              <Navigation className="w-5 h-5" /> <span>2. 서울역 출발 (하행)</span>
+            </div>
+            <div className="space-y-4 mb-6">
+              <div className="group">
+                <label className="text-[10px] text-gray-400 font-bold ml-1 mb-1 block">출발 일자</label>
+                <input type="date" className="w-full border border-gray-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-gray-400 outline-none transition" 
+                       onChange={(e) => setDepartureDate(e.target.value)} />
+              </div>
+              <div className="group">
+                <label className="text-[10px] text-gray-400 font-bold ml-1 mb-1 block">도착지(지방역)</label>
+                <select className="w-full border border-gray-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-gray-400 outline-none transition" 
+                        onChange={(e) => setEndCity(e.target.value)}>
+                  <option value="">도착지 선택</option>
+                  <option value="NODE0000000011">부산역</option>
+                  <option value="NODE0000000012">대전역</option>
+                  <option value="NODE0000000002">동대구역</option>
+                  <option value="NODE0000000020">광주송정역</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+              {departureTrains.length > 0 ? departureTrains.map((train, i) => (
+                <div key={i} className="p-4 border border-white bg-white rounded-xl hover:bg-gray-100 hover:border-gray-200 cursor-pointer transition shadow-sm">
+                  <p className="text-[10px] font-bold text-gray-400 mb-1">{train.traingradename} {train.trainno}</p>
+                  <div className="flex justify-between items-end">
+                    <span className="text-xl font-black text-gray-800">
+                      {train.depplandtime?.toString().substring(8, 10)}:{train.depplandtime?.toString().substring(10, 12)}
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-medium">서울역 출발예정</span>
+                  </div>
+                </div>
+              )) : (
+                <div className="h-full flex flex-col items-center justify-center text-gray-300 py-20 italic">
+                   <p className="text-sm text-center px-4">지방으로 떠나는 기차표를<br/>선택해 주세요</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* Right: Promotion & Price Comparison */}
-        <div className="w-full md:w-[450px] p-8 bg-white shadow-inner overflow-y-auto">
+        {/* [오른쪽] 차량 목록 섹션 */}
+        <div className="w-full md:w-2/5 p-8 bg-white overflow-y-auto shadow-2xl z-10">
           <div className="mb-8">
-            <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded">HOT TIP</span>
-            <h2 className="text-2xl font-black mt-2 leading-tight">
-              택시보다 가까운 쏘카,<br/> 서울역 공항철도 노외주차장!
+            <h2 className="text-2xl font-black text-gray-900 leading-tight">
+              서울역 도착 즉시<br/>이용 가능한 쏘카
             </h2>
-            <p className="text-gray-600 mt-4 leading-relaxed">
-              긴 택시 줄에서 기다리지 마세요. <br/>
-              공항철도 출구 바로 앞, <strong className="text-blue-600">노외주차장 쏘카존</strong>은 
-              캐리어 끌고 이동하기 가장 편한 위치에 있습니다.
-            </p>
-          </div>
-
-          {/* Price Calculator UI */}
-          <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
-            <h3 className="font-bold mb-4 flex items-center gap-2">
-              <Clock className="w-5 h-5 text-blue-500" /> 목적지별 예상 비용
-            </h3>
-            
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-500 text-sm">일반 택시 이용 시</span>
-                <span className="font-medium line-through text-red-400">{taxiPrice.toLocaleString()}원</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="font-bold text-lg">쏘카 이용 시</span>
-                <span className="text-2xl font-extrabold text-blue-600">{socarPrice.toLocaleString()}원~</span>
-              </div>
-              <p className="text-[10px] text-gray-400 mt-2">* 서울역 출발 기준 (유류비/보험료 별도)</p>
-            </div>
-
-            <button className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl mt-6 hover:bg-blue-700 transition shadow-lg shadow-blue-200">
-              지금 바로 예약하기
-            </button>
-          </div>
-
-          <div className="mt-8 space-y-4">
-            <div className="flex gap-4 items-start">
-              <div className="bg-green-100 p-2 rounded-lg"><Navigation className="w-5 h-5 text-green-600"/></div>
-              <div>
-                <h4 className="font-bold">압도적 접근성</h4>
-                <p className="text-sm text-gray-500">공항철도 15번 출구 도보 1분 거리</p>
-              </div>
-            </div>
-            <div className="flex gap-4 items-start">
-              <div className="bg-orange-100 p-2 rounded-lg"><Car className="w-5 h-5 text-orange-600"/></div>
-              <div>
-                <h4 className="font-bold">다양한 차종</h4>
-                <p className="text-sm text-gray-500">경차부터 대형 SUV까지 50대 이상 상시 대기</p>
-              </div>
+            <div className="flex items-center gap-2 mt-2 text-sm text-blue-600 font-bold">
+              <MapPin size={14} /> <span>공항철도 15번 출구 노외주차장</span>
             </div>
           </div>
+
+          {availableCars.length > 0 ? (
+            <div className="grid gap-4">
+              {availableCars.map(car => (
+                <div key={car.id} className="group border border-gray-100 rounded-2xl p-5 flex items-center justify-between hover:shadow-xl hover:border-blue-100 transition-all cursor-pointer bg-white">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-gray-50 rounded-xl flex items-center justify-center text-3xl group-hover:scale-110 transition-transform">
+                      {car.img}
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-blue-500 font-bold">{car.type}</p>
+                      <h4 className="font-bold text-gray-800 text-lg">{car.name}</h4>
+                      <p className="text-gray-400 text-xs italic">대기 중인 차량 3대</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xl font-black text-gray-900">{car.price}원</p>
+                    <button className="mt-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-[11px] font-extrabold group-hover:bg-blue-700 transition shadow-md shadow-blue-100">
+                      지금 예약
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <div className="mt-6 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                <p className="text-[11px] text-gray-500 text-center leading-relaxed font-medium">
+                  * 쏘카 이용 시간은 기차 도착 시간부터<br/>다음 기차 출발 30분 전까지로 자동 권장됩니다.
+                </p>
+              </div>
+          </div>
+          ) : (
+            <div className="h-64 border-2 border-dashed border-gray-100 rounded-3xl flex flex-col items-center justify-center text-gray-300 text-center p-8">
+              <Car size={48} className="mb-4 opacity-10" />
+              <p className="font-medium text-sm leading-relaxed">
+                기차 일정을 모두 선택하시면<br/>가장 가까운 쏘카를 추천해 드립니다.
+              </p>
+            </div>
+          )}
         </div>
       </main>
 
-      <footer className="bg-white border-t p-6 text-center text-xs text-gray-400">
-        &copy; 2024 SOCAR Seoul Station Project. All Rights Reserved.
+      {/* ======= Footer ======= */}
+      <footer className="h-16 bg-white border-t flex items-center justify-center text-[10px] text-gray-400 tracking-widest uppercase">
+        &copy; 2026 SOCAR Seoul Station Project. Mobility Innovation.
       </footer>
     </div>
   );
